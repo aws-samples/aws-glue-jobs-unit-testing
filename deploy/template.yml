@@ -1,0 +1,51 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: '**WARNING** This template creates IAM Role, AWS Glue job and related resources. You will be billed for the AWS resources used if you create a stack from this template.'
+Parameters:
+  S3Bucketname:
+    Description: Name of the existing Artifact store S3 bucket creation
+    Type: String
+Resources:
+  GlueJobRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - glue.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${S3Bucketname}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${S3Bucketname}/*'
+  GlueJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Command:
+        Name: glueetl
+        ScriptLocation: !Sub 's3://${S3Bucketname}/GlueJobs/sample.py'
+      DefaultArguments:
+        --job-bookmark-option: job-bookmark-enable
+      GlueVersion: '3.0'
+      ExecutionProperty:
+        MaxConcurrentRuns: 2
+      MaxRetries: 0
+      Name: samplejob
+      Role: !Ref 'GlueJobRole'
+      WorkerType: G.2X
+      NumberOfWorkers: 10

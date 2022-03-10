@@ -1,0 +1,333 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: '**WARNING** This template creates IAM Roles, AWS CodeCommit repostiory, AWS CodeBuild projects and report groups, AWS CodePipeline and related resources. You will be billed for the AWS resources
+  used if you create a stack from this template.'
+Parameters:
+  RepositoryName:
+    Description: Name of the GitHub repository with the sample Glue code
+    Type: String
+    Default: aws-glue-unit-testing
+  BranchName:
+    Description: Repository branch name to monitor for changes
+    Type: String
+    Default: master
+  CodeZipFile:
+    Description: S3 bucket key value of Zip file downloaded from GitHub
+    Type: String
+    Default: code.zip
+  BucketName:
+    Description: Name of the existing Artifact store S3 bucket creation
+    Type: String
+    Default: aws-glue-artifacts-us-east-1
+    AllowedPattern: ^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$
+  ApplicationStackName:
+    Description: Glue job deployment application stack name
+    Type: String
+    Default: glue-codepipeline-app
+    AllowedPattern: '[A-Za-z0-9-]+'
+  TestReportGroupName:
+    Description: Glue application unit test report group name
+    Type: String
+    Default: glue-unittest-report
+    AllowedPattern: '[A-Za-z0-9-]+'
+Resources:
+  CodeCommitRepo:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      Code:
+        S3:
+          Bucket: !Ref 'BucketName'
+          Key: !Ref 'CodeZipFile'
+        BranchName: !Ref 'BranchName'
+      RepositoryDescription: Glue Job sample
+      RepositoryName: !Ref 'RepositoryName'
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Effect: Allow
+          Principal:
+            Service:
+              - codepipeline.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AWS-CodePipeline-Service-Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codecommit:GetBranch
+                  - codecommit:GetCommit
+                  - codecommit:UploadArchive
+                  - codecommit:GetUploadArchiveStatus
+                  - codecommit:CancelUploadArchive
+                Resource:
+                  - !GetAtt 'CodeCommitRepo.Arn'
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:DeleteStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:UpdateStack
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:SetStackPolicy
+                  - cloudformation:ValidateTemplate
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ApplicationStackName}/*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${BucketName}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${BucketName}/*'
+              - Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Resource:
+                  - !GetAtt 'TestBuild.Arn'
+                  - !GetAtt 'PublishBuild.Arn'
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt 'CloudformationRole.Arn'
+  GlueCodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub '${RepositoryName}-${BranchName}-pipeline'
+      ArtifactStore:
+        Type: S3
+        Location: !Ref 'BucketName'
+      RestartExecutionOnUpdate: true
+      RoleArn: !GetAtt 'CodePipelineServiceRole.Arn'
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: 1
+              OutputArtifacts:
+                - Name: SourceCode
+              Configuration:
+                RepositoryName: !Ref 'RepositoryName'
+                BranchName: !Ref 'BranchName'
+                PollForSourceChanges: false
+              RunOrder: 1
+        - Name: Build_and_Publish
+          Actions:
+            - Name: Test_and_Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              InputArtifacts:
+                - Name: SourceCode
+              OutputArtifacts:
+                - Name: BuiltCode
+              Configuration:
+                ProjectName: !Sub '${RepositoryName}-${BranchName}-build'
+              RunOrder: 1
+            - Name: Publish
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              InputArtifacts:
+                - Name: BuiltCode
+              Configuration:
+                ProjectName: !Sub '${RepositoryName}-${BranchName}-publish'
+              RunOrder: 2
+        - Name: Deploy
+          Actions:
+            - Name: CloudFormationDeploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: '1'
+              InputArtifacts:
+                - Name: BuiltCode
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM
+                RoleArn: !GetAtt 'CloudformationRole.Arn'
+                StackName: !Ref 'ApplicationStackName'
+                TemplatePath: BuiltCode::deploy/template.yml
+                ParameterOverrides: !Sub '{"S3Bucketname": "${BucketName}"}'
+              RunOrder: 1
+  CloudformationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: cloudformation.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AWS-Cloudformation-Service-Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - glue:CreateJob
+                  - glue:DeleteJob
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/samplejob'
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:PutRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:PassRole
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/glue-codepipeline-app-GlueJobRole-*'
+  TestBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      BadgeEnabled: false
+      Environment:
+        ComputeType: BUILD_GENERAL1_LARGE
+        Image: public.ecr.aws/glue/aws-glue-libs:glue_libs_3.0.0_image_01
+        ImagePullCredentialsType: CODEBUILD
+        PrivilegedMode: false
+        Type: LINUX_CONTAINER
+      Name: !Sub '${RepositoryName}-${BranchName}-build'
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
+      Source:
+        BuildSpec: !Sub |
+          version: 0.2
+          env:
+            shell: bash
+            variables:
+              GLUEJOBS_PATH: "src"
+              JUNIT_XML: junit_coverage.xml
+          phases:
+            pre_build:
+              commands:
+                - echo "Install dependencies"
+                - python3 --version
+                - pip3 install pytest-cov pytest pandas moto[server] flask flask_cors
+                - cd "$CODEBUILD_SRC_DIR/$GLUEJOBS_PATH"
+                - pip3 install -r requirements.txt
+            build:
+              commands:
+                - cd "$CODEBUILD_SRC_DIR/"
+                - echo "Running unit test cases"
+                - python3 -m pytest tests/ --junitxml=$CODEBUILD_SRC_DIR/$JUNIT_XML
+          reports:
+            ${TestReportGroup.Arn}:
+              files:
+                - $JUNIT_XML
+              base-directory: $CODEBUILD_SRC_DIR
+              discard-paths: yes
+              file-format: JunitXml
+          artifacts:
+            files:
+              - $GLUEJOBS_PATH/*
+              - deploy/*
+            base-directory: $CODEBUILD_SRC_DIR
+            discard-paths: no
+        Type: CODEPIPELINE
+      TimeoutInMinutes: 15
+  PublishBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      BadgeEnabled: false
+      Environment:
+        ComputeType: BUILD_GENERAL1_LARGE
+        Image: aws/codebuild/standard:5.0
+        ImagePullCredentialsType: CODEBUILD
+        PrivilegedMode: false
+        Type: LINUX_CONTAINER
+      Name: !Sub '${RepositoryName}-${BranchName}-publish'
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
+      Source:
+        BuildSpec: !Sub |
+          version: 0.2
+          env:
+            shell: bash
+            variables:
+              GLUEJOBS_PATH: "src"
+          phases:
+            build:
+              commands:
+                - cd "$CODEBUILD_SRC_DIR/$GLUEJOBS_PATH"
+                - echo "Publish GlueJob to S3"
+                - aws s3 cp ./ s3://${BucketName}/GlueJobs/ --sse AES256 --recursive --exclude "*.txt" --exclude "./tests/"
+        Type: CODEPIPELINE
+      TimeoutInMinutes: 15
+  TestReportGroup:
+    Type: AWS::CodeBuild::ReportGroup
+    Properties:
+      DeleteReports: true
+      ExportConfig:
+        ExportConfigType: S3
+        S3Destination:
+          Bucket: !Ref 'BucketName'
+          Path: test-report
+      Name: !Ref 'TestReportGroupName'
+      Type: TEST
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: codebuild.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AWS-CodeBuild-Service-Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${BucketName}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${BucketName}/*'
+              - Effect: Allow
+                Action:
+                  - codebuild:CreateReportGroup
+                  - codebuild:CreateReport
+                  - codebuild:UpdateReport
+                  - codebuild:BatchPutTestCases
+                  - codebuild:BatchPutCodeCoverages
+                Resource:
+                  - !GetAtt 'TestReportGroup.Arn'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
