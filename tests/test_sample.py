@@ -96,7 +96,8 @@ def test_transform(glueContext: GlueContext):
 # Test to verify data present in valid partioned format
 def test_process_data_record(glueContext: GlueContext):
     """
-    Test case to test the process_data function for valid partitioned data output
+    Test case to test the process_data function for
+    valid partitioned data output
 
     Args:
         glueContext (GlueContext): Test Glue context object

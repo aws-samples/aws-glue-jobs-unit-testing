@@ -41,6 +41,22 @@ Resources:
         BranchName: !Ref 'BranchName'
       RepositoryDescription: Glue Job sample
       RepositoryName: !Ref 'RepositoryName'
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Key for encrypting artifacts in S3 Buckets
+      Enabled: true
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions for root
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: kms:*
+            Resource: '*'
+      KeyUsage: ENCRYPT_DECRYPT
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -101,6 +117,14 @@ Resources:
                   - iam:PassRole
                 Resource:
                   - !GetAtt 'CloudformationRole.Arn'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:Encrypt
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource:
+                  - !GetAtt 'KMSKey.Arn'
   GlueCodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -168,7 +192,7 @@ Resources:
                 RoleArn: !GetAtt 'CloudformationRole.Arn'
                 StackName: !Ref 'ApplicationStackName'
                 TemplatePath: BuiltCode::deploy/template.yml
-                ParameterOverrides: !Sub '{"S3Bucketname": "${BucketName}"}'
+                ParameterOverrides: !Sub '{"S3Bucketname": "${BucketName}", "KMSKey": "${KMSKey.Arn}"}'
               RunOrder: 1
   CloudformationRole:
     Type: AWS::IAM::Role
@@ -215,6 +239,7 @@ Resources:
         Type: LINUX_CONTAINER
       Name: !Sub '${RepositoryName}-${BranchName}-build'
       ServiceRole: !GetAtt 'CodeBuildRole.Arn'
+      EncryptionKey: !GetAtt 'KMSKey.Arn'
       Source:
         BuildSpec: !Sub |
           version: 0.2
@@ -228,12 +253,16 @@ Resources:
               commands:
                 - echo "Install dependencies"
                 - python3 --version
-                - pip3 install pytest-cov pytest pandas moto[server] flask flask_cors
+                - pip3 install cfn-lint flake8 pytest-cov pytest pandas moto[server] flask flask_cors
                 - cd "$CODEBUILD_SRC_DIR/$GLUEJOBS_PATH"
                 - pip3 install -r requirements.txt
             build:
               commands:
                 - cd "$CODEBUILD_SRC_DIR/"
+                - echo "Running Cloudformation templates linter"
+                - cfn-lint -c INCLUDE_CHECKS I3042 -- deploy/template.yml
+                - echo "Running Python linter"
+                - flake8 --ignore F403,F405
                 - echo "Running unit test cases"
                 - python3 -m pytest tests/ --junitxml=$CODEBUILD_SRC_DIR/$JUNIT_XML
           reports:
@@ -265,6 +294,7 @@ Resources:
         Type: LINUX_CONTAINER
       Name: !Sub '${RepositoryName}-${BranchName}-publish'
       ServiceRole: !GetAtt 'CodeBuildRole.Arn'
+      EncryptionKey: !GetAtt 'KMSKey.Arn'
       Source:
         BuildSpec: !Sub |
           version: 0.2
@@ -330,4 +360,13 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: '*'
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${RepositoryName}-${BranchName}-*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:Encrypt
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource:
+                  - !GetAtt 'KMSKey.Arn'

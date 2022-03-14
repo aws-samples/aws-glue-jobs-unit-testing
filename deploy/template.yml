@@ -5,6 +5,9 @@ Parameters:
   S3Bucketname:
     Description: Name of the existing Artifact store S3 bucket creation
     Type: String
+  KMSKey:
+    Description: KMS Key used to encrypt the bucket
+    Type: String
 Resources:
   GlueJobRole:
     Type: AWS::IAM::Role
@@ -33,6 +36,14 @@ Resources:
                 Resource:
                   - !Sub 'arn:${AWS::Partition}:s3:::${S3Bucketname}'
                   - !Sub 'arn:${AWS::Partition}:s3:::${S3Bucketname}/*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:Encrypt
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource:
+                  - !Ref 'KMSKey'
   GlueJob:
     Type: AWS::Glue::Job
     Properties:
