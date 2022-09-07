@@ -253,7 +253,7 @@ Resources:
               commands:
                 - echo "Install dependencies"
                 - python3 --version
-                - pip3 install cfn-lint flake8 pytest-cov pytest pandas moto[server] flask flask_cors
+                - pip3 install -r tests/requirements-test.txt
                 - cd "$CODEBUILD_SRC_DIR/$GLUEJOBS_PATH"
                 - pip3 install -r requirements.txt
             build:

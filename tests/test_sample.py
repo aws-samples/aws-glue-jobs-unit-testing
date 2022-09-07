@@ -1,7 +1,7 @@
 import os
+import boto3
 import signal
 import subprocess
-import boto3
 from src.sample import transform
 from awsglue.context import GlueContext
 from pyspark.sql import SparkSession, DataFrame
@@ -11,7 +11,7 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 SOURCE_NAME = "data.csv"
 TABLE_NAME = "dummy"
 S3_BUCKET_NAME = "data-s3"
-ENDPOINT_URL = "http://127.0.0.1:5000"
+ENDPOINT_URL = "http://127.0.0.1:5000/"
 
 
 def initialize_test(spark: SparkSession):
@@ -30,8 +30,18 @@ def initialize_test(spark: SparkSession):
         shell=True,
         preexec_fn=os.setsid,
     )
-    s3 = boto3.resource("s3", endpoint_url=ENDPOINT_URL)
-    s3.create_bucket(Bucket=S3_BUCKET_NAME)
+
+    s3 = boto3.resource(
+        "s3",
+        endpoint_url=ENDPOINT_URL,
+        aws_access_key_id="FakeKey",
+        aws_secret_access_key="FakeSecretKey",
+        aws_session_token="FakeSessionToken",
+        region_name="us-east-1",
+    )
+    s3.create_bucket(
+        Bucket=S3_BUCKET_NAME,
+    )
 
     hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
     hadoop_conf.set("fs.s3a.access.key", "dummy-value")
@@ -105,15 +115,16 @@ def test_process_data_record(glueContext: GlueContext):
     spark = glueContext.spark_session
     process = initialize_test(spark)
 
-    from src.sample import process_data
+    try:
+        from src.sample import process_data
 
-    process_data(spark, SOURCE_NAME, TABLE_NAME)
-    df = spark.read.parquet(
-        f"s3a://{S3_BUCKET_NAME}/{TABLE_NAME}/test=1962/data=5/msg=25"
-    )
-    assert isinstance(df, DataFrame)
-
-    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+        process_data(spark, SOURCE_NAME, TABLE_NAME)
+        df = spark.read.parquet(
+            f"s3a://{S3_BUCKET_NAME}/{TABLE_NAME}/test=1962/data=5/msg=25"
+        )
+        assert isinstance(df, DataFrame)
+    finally:
+        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
 
 
 # Test to verify number of records
@@ -128,11 +139,12 @@ def test_process_data_record_count(glueContext: GlueContext):
     spark = glueContext.spark_session
     process = initialize_test(spark)
 
-    from src.sample import process_data
+    try:
+        from src.sample import process_data
 
-    process_data(spark, SOURCE_NAME, TABLE_NAME)
+        process_data(spark, SOURCE_NAME, TABLE_NAME)
 
-    df = spark.read.parquet(f"s3a://{S3_BUCKET_NAME}/{TABLE_NAME}")
-    assert df.count() == 3
-
-    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+        df = spark.read.parquet(f"s3a://{S3_BUCKET_NAME}/{TABLE_NAME}")
+        assert df.count() == 3
+    finally:
+        os.killpg(os.getpgid(process.pid), signal.SIGTERM)

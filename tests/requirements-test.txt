@@ -1,0 +1,8 @@
+cfn-lint 
+flake8 
+pytest-cov 
+pytest 
+pandas 
+moto[server]==4.0.2
+flask==2.1.3
+flask_cors
