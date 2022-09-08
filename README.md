@@ -10,6 +10,8 @@ AWS services used for the CI/CD portion in the solution:
 - [AWS CloudFormation](https://aws.amazon.com/cloudformation/)
 - [Amazon Elastic Container Registry](https://aws.amazon.com/ecr/)
 
+The AWS Cloudformation template provided in this sample does not work in ap-southeast-3, af-south-1, ap-northeast-3, ap-southeast-3, me-south-1 and us-gov-east-1 AWS regions due to service limitations.
+
 ## Pipeline stages
 
 ![Pipeline stages](assets/pipeline-stages.png)
