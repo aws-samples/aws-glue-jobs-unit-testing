@@ -23,7 +23,7 @@ The cloudformation stack for setting up the pipeline can be deployed using Cloud
 First, zip and upload the sample AWS Glue job and its pytest test cases code to an S3 bucket
 
 ```bash
-zip -r code.zip src/sample.py src/requirements.txt tests/*.py deploy/*.yml
+zip -r code.zip src/sample.py src/requirements.txt tests/* deploy/*.yml
 ```
 
 ```bash
