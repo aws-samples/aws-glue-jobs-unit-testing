@@ -1,7 +1,8 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
-Description: '**WARNING** This template creates IAM Roles, AWS CodeCommit repostiory, AWS CodeBuild projects and report groups, AWS CodePipeline and related resources. You will be billed for the AWS resources
-  used if you create a stack from this template.'
+Description:
+  "**WARNING** This template creates IAM Roles, AWS CodeCommit repostiory, AWS CodeBuild projects and report groups, AWS CodePipeline and related resources. You will be billed for the AWS resources
+  used if you create a stack from this template."
 Parameters:
   RepositoryName:
     Description: Name of the GitHub repository with the sample Glue code
@@ -24,23 +25,23 @@ Parameters:
     Description: Glue job deployment application stack name
     Type: String
     Default: glue-codepipeline-app
-    AllowedPattern: '[A-Za-z0-9-]+'
+    AllowedPattern: "[A-Za-z0-9-]+"
   TestReportGroupName:
     Description: Glue application unit test report group name
     Type: String
     Default: glue-unittest-report
-    AllowedPattern: '[A-Za-z0-9-]+'
+    AllowedPattern: "[A-Za-z0-9-]+"
 Resources:
   CodeCommitRepo:
     Type: AWS::CodeCommit::Repository
     Properties:
       Code:
         S3:
-          Bucket: !Ref 'BucketName'
-          Key: !Ref 'CodeZipFile'
-        BranchName: !Ref 'BranchName'
+          Bucket: !Ref "BucketName"
+          Key: !Ref "CodeZipFile"
+        BranchName: !Ref "BranchName"
       RepositoryDescription: Glue Job sample
-      RepositoryName: !Ref 'RepositoryName'
+      RepositoryName: !Ref "RepositoryName"
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -48,20 +49,20 @@ Resources:
       Enabled: true
       EnableKeyRotation: true
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: Enable IAM User Permissions for root
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+              AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
             Action: kms:*
-            Resource: '*'
+            Resource: "*"
       KeyUsage: ENCRYPT_DECRYPT
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           Effect: Allow
           Principal:
@@ -71,7 +72,7 @@ Resources:
       Policies:
         - PolicyName: AWS-CodePipeline-Service-Policy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -81,7 +82,7 @@ Resources:
                   - codecommit:GetUploadArchiveStatus
                   - codecommit:CancelUploadArchive
                 Resource:
-                  - !GetAtt 'CodeCommitRepo.Arn'
+                  - !GetAtt "CodeCommitRepo.Arn"
               - Effect: Allow
                 Action:
                   - cloudformation:CreateStack
@@ -95,7 +96,7 @@ Resources:
                   - cloudformation:SetStackPolicy
                   - cloudformation:ValidateTemplate
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ApplicationStackName}/*'
+                  - !Sub "arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ApplicationStackName}/*"
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -103,20 +104,20 @@ Resources:
                   - s3:ListBucket
                   - s3:DeleteObject
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:s3:::${BucketName}'
-                  - !Sub 'arn:${AWS::Partition}:s3:::${BucketName}/*'
+                  - !Sub "arn:${AWS::Partition}:s3:::${BucketName}"
+                  - !Sub "arn:${AWS::Partition}:s3:::${BucketName}/*"
               - Effect: Allow
                 Action:
                   - codebuild:BatchGetBuilds
                   - codebuild:StartBuild
                 Resource:
-                  - !GetAtt 'TestBuild.Arn'
-                  - !GetAtt 'PublishBuild.Arn'
+                  - !GetAtt "TestBuild.Arn"
+                  - !GetAtt "PublishBuild.Arn"
               - Effect: Allow
                 Action:
                   - iam:PassRole
                 Resource:
-                  - !GetAtt 'CloudformationRole.Arn'
+                  - !GetAtt "CloudformationRole.Arn"
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -124,16 +125,16 @@ Resources:
                   - kms:GenerateDataKey
                   - kms:DescribeKey
                 Resource:
-                  - !GetAtt 'KMSKey.Arn'
+                  - !GetAtt "KMSKey.Arn"
   GlueCodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: !Sub '${RepositoryName}-${BranchName}-pipeline'
+      Name: !Sub "${RepositoryName}-${BranchName}-pipeline"
       ArtifactStore:
         Type: S3
-        Location: !Ref 'BucketName'
+        Location: !Ref "BucketName"
       RestartExecutionOnUpdate: true
-      RoleArn: !GetAtt 'CodePipelineServiceRole.Arn'
+      RoleArn: !GetAtt "CodePipelineServiceRole.Arn"
       Stages:
         - Name: Source
           Actions:
@@ -146,8 +147,8 @@ Resources:
               OutputArtifacts:
                 - Name: SourceCode
               Configuration:
-                RepositoryName: !Ref 'RepositoryName'
-                BranchName: !Ref 'BranchName'
+                RepositoryName: !Ref "RepositoryName"
+                BranchName: !Ref "BranchName"
                 PollForSourceChanges: false
               RunOrder: 1
         - Name: Build_and_Publish
@@ -157,24 +158,24 @@ Resources:
                 Category: Build
                 Owner: AWS
                 Provider: CodeBuild
-                Version: '1'
+                Version: "1"
               InputArtifacts:
                 - Name: SourceCode
               OutputArtifacts:
                 - Name: BuiltCode
               Configuration:
-                ProjectName: !Sub '${RepositoryName}-${BranchName}-build'
+                ProjectName: !Sub "${RepositoryName}-${BranchName}-build"
               RunOrder: 1
             - Name: Publish
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Provider: CodeBuild
-                Version: '1'
+                Version: "1"
               InputArtifacts:
                 - Name: BuiltCode
               Configuration:
-                ProjectName: !Sub '${RepositoryName}-${BranchName}-publish'
+                ProjectName: !Sub "${RepositoryName}-${BranchName}-publish"
               RunOrder: 2
         - Name: Deploy
           Actions:
@@ -183,14 +184,14 @@ Resources:
                 Category: Deploy
                 Owner: AWS
                 Provider: CloudFormation
-                Version: '1'
+                Version: "1"
               InputArtifacts:
                 - Name: BuiltCode
               Configuration:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_IAM
-                RoleArn: !GetAtt 'CloudformationRole.Arn'
-                StackName: !Ref 'ApplicationStackName'
+                RoleArn: !GetAtt "CloudformationRole.Arn"
+                StackName: !Ref "ApplicationStackName"
                 TemplatePath: BuiltCode::deploy/template.yml
                 ParameterOverrides: !Sub '{"S3Bucketname": "${BucketName}", "KMSKey": "${KMSKey.Arn}"}'
               RunOrder: 1
@@ -198,7 +199,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           Effect: Allow
           Principal:
@@ -207,14 +208,14 @@ Resources:
       Policies:
         - PolicyName: AWS-Cloudformation-Service-Policy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - glue:CreateJob
                   - glue:DeleteJob
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/samplejob'
+                  - !Sub "arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/samplejob"
               - Effect: Allow
                 Action:
                   - iam:CreateRole
@@ -224,7 +225,7 @@ Resources:
                   - iam:DeleteRolePolicy
                   - iam:PassRole
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/glue-codepipeline-app-GlueJobRole-*'
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/glue-codepipeline-app-GlueJobRole-*"
   TestBuild:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -233,13 +234,13 @@ Resources:
       BadgeEnabled: false
       Environment:
         ComputeType: BUILD_GENERAL1_LARGE
-        Image: public.ecr.aws/glue/aws-glue-libs:glue_libs_3.0.0_image_01
+        Image: public.ecr.aws/glue/aws-glue-libs:glue_libs_4.0.0_image_01
         ImagePullCredentialsType: CODEBUILD
         PrivilegedMode: false
         Type: LINUX_CONTAINER
-      Name: !Sub '${RepositoryName}-${BranchName}-build'
-      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
-      EncryptionKey: !GetAtt 'KMSKey.Arn'
+      Name: !Sub "${RepositoryName}-${BranchName}-build"
+      ServiceRole: !GetAtt "CodeBuildRole.Arn"
+      EncryptionKey: !GetAtt "KMSKey.Arn"
       Source:
         BuildSpec: !Sub |
           version: 0.2
@@ -292,9 +293,9 @@ Resources:
         ImagePullCredentialsType: CODEBUILD
         PrivilegedMode: false
         Type: LINUX_CONTAINER
-      Name: !Sub '${RepositoryName}-${BranchName}-publish'
-      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
-      EncryptionKey: !GetAtt 'KMSKey.Arn'
+      Name: !Sub "${RepositoryName}-${BranchName}-publish"
+      ServiceRole: !GetAtt "CodeBuildRole.Arn"
+      EncryptionKey: !GetAtt "KMSKey.Arn"
       Source:
         BuildSpec: !Sub |
           version: 0.2
@@ -317,15 +318,15 @@ Resources:
       ExportConfig:
         ExportConfigType: S3
         S3Destination:
-          Bucket: !Ref 'BucketName'
+          Bucket: !Ref "BucketName"
           Path: test-report
-      Name: !Ref 'TestReportGroupName'
+      Name: !Ref "TestReportGroupName"
       Type: TEST
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           Effect: Allow
           Principal:
@@ -334,7 +335,7 @@ Resources:
       Policies:
         - PolicyName: AWS-CodeBuild-Service-Policy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -344,8 +345,8 @@ Resources:
                   - s3:GetBucketAcl
                   - s3:GetBucketLocation
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:s3:::${BucketName}'
-                  - !Sub 'arn:${AWS::Partition}:s3:::${BucketName}/*'
+                  - !Sub "arn:${AWS::Partition}:s3:::${BucketName}"
+                  - !Sub "arn:${AWS::Partition}:s3:::${BucketName}/*"
               - Effect: Allow
                 Action:
                   - codebuild:CreateReportGroup
@@ -354,14 +355,14 @@ Resources:
                   - codebuild:BatchPutTestCases
                   - codebuild:BatchPutCodeCoverages
                 Resource:
-                  - !GetAtt 'TestReportGroup.Arn'
+                  - !GetAtt "TestReportGroup.Arn"
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${RepositoryName}-${BranchName}-*'
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${RepositoryName}-${BranchName}-*"
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -369,4 +370,4 @@ Resources:
                   - kms:GenerateDataKey
                   - kms:DescribeKey
                 Resource:
-                  - !GetAtt 'KMSKey.Arn'
+                  - !GetAtt "KMSKey.Arn"

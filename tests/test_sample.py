@@ -25,7 +25,7 @@ def initialize_test(spark: SparkSession):
         process: Process object for the moto server that was started
     """
     process = subprocess.Popen(
-        "moto_server s3 -p5000",
+        "moto_server -p5000",
         stdout=subprocess.PIPE,
         shell=True,
         preexec_fn=os.setsid,
