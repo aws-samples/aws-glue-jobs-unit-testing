@@ -8,7 +8,7 @@ from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 
 
-SOURCE_NAME = "data.csv"
+SOURCE_NAME = "data.parquet"
 TABLE_NAME = "dummy"
 S3_BUCKET_NAME = "data-s3"
 ENDPOINT_URL = "http://127.0.0.1:5000/"
