@@ -195,8 +195,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - glue:CreateJob
+                  - glue:CreateSecurityConfiguration
                   - glue:UpdateJob
                   - glue:DeleteJob
+                  - glue:DeleteSecurityConfiguration
                 Resource:
                   - !Sub "arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/samplejob"
               - Effect: Allow
