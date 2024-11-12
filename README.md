@@ -5,20 +5,19 @@ This demo illustrates the execution of PyTest unit test cases for AWS Glue jobs 
 AWS services used for the CI/CD portion in the solution:
 
 - [AWS Glue](https://aws.amazon.com/glue/)
-- [AWS CodeCommit](https://aws.amazon.com/codecommit/)
 - [AWS CodeBuild](https://aws.amazon.com/codebuild/)
 - [AWS CloudFormation](https://aws.amazon.com/cloudformation/)
 - [Amazon Elastic Container Registry](https://aws.amazon.com/ecr/)
 
 The AWS Cloudformation template provided in this sample does not work in ap-southeast-1, af-south-1, ap-northeast-3, ap-southeast-3, me-south-1 and us-gov-east-1 AWS regions due to service limitations.
 
-## Pipeline stages
+## Architecture
 
-![Pipeline stages](assets/pipeline-stages.png)
+![Architecture Diagram](assets/architecture.png)
 
 ## Stack deployment
 
-The cloudformation stack for setting up the pipeline can be deployed using Cloudoformation page in AWS Console or using the AWS CLI as shown below
+The cloudformation stack for setting up the pipeline can be deployed using Cloudformation page in AWS Console or using the AWS CLI as shown below
 
 First, zip and upload the sample AWS Glue job and its pytest test cases code to an S3 bucket
 
@@ -33,7 +32,7 @@ aws s3 cp code.zip s3://aws-glue-artifacts-us-east-1/
 Trigger the cloudformation stack creation pointing to that S3 bucket zip.
 
 ```bash
-aws cloudformation create-stack --stack-name glue-unit-testing-pipeline --template-body file://pipeline.yml --parameters ParameterKey=ApplicationStackName,ParameterValue=glue-codepipeline-app ParameterKey=BucketName,ParameterValue=aws-glue-artifacts-us-east-1 ParameterKey=BranchName,ParameterValue=master ParameterKey=CodeZipFile,ParameterValue=code.zip ParameterKey=RepositoryName,ParameterValue=aws-glue-unit-testing ParameterKey=TestReportGroupName,ParameterValue=glue-unittest-report --capabilities CAPABILITY_NAMED_IAM
+aws cloudformation create-stack --stack-name glue-unit-testing-pipeline --template-body file://pipeline.yml --parameters ParameterKey=ApplicationStackName,ParameterValue=glue-codepipeline-app ParameterKey=BucketName,ParameterValue=aws-glue-artifacts1-us-east ParameterKey=CodeZipFile,ParameterValue=code.zip ParameterKey=TestReportGroupName,ParameterValue=glue-unittest-report --capabilities CAPABILITY_NAMED_IAM --region us-east-1
 ```
 
 ## Components details
@@ -44,7 +43,7 @@ aws cloudformation create-stack --stack-name glue-unit-testing-pipeline --templa
 
 [src/requirements.txt](src/requirements.txt) - Simple text file containing AWS Glue job's dependencies for use by Python package manager Pip.
 
-[tests/conftest.py](tests/conftest.py) - PyTest confgiuration for initializing Glue context and Spark session
+[tests/conftest.py](tests/conftest.py) - PyTest configuration for initializing Glue context and Spark session
 
 [tests/test_sample.py](tests/test_sample.py) - PyTest test cases for the AWS Glue job [src/sample.py](src/sample.py).
 

@@ -1,17 +1,9 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
 Description:
-  "**WARNING** This template creates IAM Roles, AWS CodeCommit repostiory, AWS CodeBuild projects and report groups, AWS CodePipeline and related resources. You will be billed for the AWS resources
+  "**WARNING** This template creates IAM Roles, AWS CodeCommit repository, AWS CodeBuild projects and report groups, AWS CodePipeline and related resources. You will be billed for the AWS resources
   used if you create a stack from this template."
 Parameters:
-  RepositoryName:
-    Description: Name of the GitHub repository with the sample Glue code
-    Type: String
-    Default: aws-glue-unit-testing
-  BranchName:
-    Description: Repository branch name to monitor for changes
-    Type: String
-    Default: master
   CodeZipFile:
     Description: S3 bucket key value of Zip file downloaded from GitHub
     Type: String
@@ -31,17 +23,12 @@ Parameters:
     Type: String
     Default: glue-unittest-report
     AllowedPattern: "[A-Za-z0-9-]+"
+Metadata:
+  cdk_nag:
+    rules_to_suppress:
+      - id: AwsSolutions-IAM5
+        reason: "Wild card in policy is required for matching S3 objects"
 Resources:
-  CodeCommitRepo:
-    Type: AWS::CodeCommit::Repository
-    Properties:
-      Code:
-        S3:
-          Bucket: !Ref "BucketName"
-          Key: !Ref "CodeZipFile"
-        BranchName: !Ref "BranchName"
-      RepositoryDescription: Glue Job sample
-      RepositoryName: !Ref "RepositoryName"
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -58,6 +45,8 @@ Resources:
             Action: kms:*
             Resource: "*"
       KeyUsage: ENCRYPT_DECRYPT
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -76,15 +65,6 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - codecommit:GetBranch
-                  - codecommit:GetCommit
-                  - codecommit:UploadArchive
-                  - codecommit:GetUploadArchiveStatus
-                  - codecommit:CancelUploadArchive
-                Resource:
-                  - !GetAtt "CodeCommitRepo.Arn"
-              - Effect: Allow
-                Action:
                   - cloudformation:CreateStack
                   - cloudformation:DeleteStack
                   - cloudformation:DescribeStacks
@@ -99,7 +79,7 @@ Resources:
                   - !Sub "arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ApplicationStackName}/*"
               - Effect: Allow
                 Action:
-                  - s3:GetObject
+                  - s3:Get*
                   - s3:PutObject
                   - s3:ListBucket
                   - s3:DeleteObject
@@ -129,7 +109,9 @@ Resources:
   GlueCodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: !Sub "${RepositoryName}-${BranchName}-pipeline"
+      ExecutionMode: QUEUED
+      PipelineType: V2
+      Name: !Sub "${ApplicationStackName}-pipeline"
       ArtifactStore:
         Type: S3
         Location: !Ref "BucketName"
@@ -142,13 +124,13 @@ Resources:
               ActionTypeId:
                 Category: Source
                 Owner: AWS
-                Provider: CodeCommit
+                Provider: S3
                 Version: 1
               OutputArtifacts:
                 - Name: SourceCode
               Configuration:
-                RepositoryName: !Ref "RepositoryName"
-                BranchName: !Ref "BranchName"
+                S3Bucket: !Ref BucketName
+                S3ObjectKey: !Ref CodeZipFile
                 PollForSourceChanges: false
               RunOrder: 1
         - Name: Build_and_Publish
@@ -164,7 +146,7 @@ Resources:
               OutputArtifacts:
                 - Name: BuiltCode
               Configuration:
-                ProjectName: !Sub "${RepositoryName}-${BranchName}-build"
+                ProjectName: !Sub "${ApplicationStackName}-build"
               RunOrder: 1
             - Name: Publish
               ActionTypeId:
@@ -175,7 +157,7 @@ Resources:
               InputArtifacts:
                 - Name: BuiltCode
               Configuration:
-                ProjectName: !Sub "${RepositoryName}-${BranchName}-publish"
+                ProjectName: !Sub "${ApplicationStackName}-publish"
               RunOrder: 2
         - Name: Deploy
           Actions:
@@ -213,6 +195,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - glue:CreateJob
+                  - glue:UpdateJob
                   - glue:DeleteJob
                 Resource:
                   - !Sub "arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/samplejob"
@@ -238,7 +221,7 @@ Resources:
         ImagePullCredentialsType: CODEBUILD
         PrivilegedMode: false
         Type: LINUX_CONTAINER
-      Name: !Sub "${RepositoryName}-${BranchName}-build"
+      Name: !Sub "${ApplicationStackName}-build"
       ServiceRole: !GetAtt "CodeBuildRole.Arn"
       EncryptionKey: !GetAtt "KMSKey.Arn"
       Source:
@@ -263,7 +246,7 @@ Resources:
                 - echo "Running Cloudformation templates linter"
                 - cfn-lint -c INCLUDE_CHECKS I3042 -- deploy/template.yml
                 - echo "Running Python linter"
-                - flake8 --ignore F403,F405
+                - flake8 --ignore F403,F405,E501
                 - echo "Running unit test cases"
                 - python3 -m pytest tests/ --junitxml=$CODEBUILD_SRC_DIR/$JUNIT_XML
           reports:
@@ -293,7 +276,7 @@ Resources:
         ImagePullCredentialsType: CODEBUILD
         PrivilegedMode: false
         Type: LINUX_CONTAINER
-      Name: !Sub "${RepositoryName}-${BranchName}-publish"
+      Name: !Sub "${ApplicationStackName}-publish"
       ServiceRole: !GetAtt "CodeBuildRole.Arn"
       EncryptionKey: !GetAtt "KMSKey.Arn"
       Source:
@@ -362,7 +345,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${RepositoryName}-${BranchName}-*"
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ApplicationStackName}-*"
               - Effect: Allow
                 Action:
                   - kms:Decrypt

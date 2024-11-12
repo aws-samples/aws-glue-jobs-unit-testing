@@ -1,7 +1,7 @@
 import os
 import boto3
 import signal
-import subprocess
+import subprocess  # nosec B404
 from src.sample import transform
 from awsglue.context import GlueContext
 from pyspark.sql import SparkSession, DataFrame
@@ -24,14 +24,14 @@ def initialize_test(spark: SparkSession):
     Returns:
         process: Process object for the moto server that was started
     """
-    process = subprocess.Popen(
+    process = subprocess.Popen(  # nosec B607
         "moto_server -p5000",
         stdout=subprocess.PIPE,
-        shell=True,
+        shell=True,  # nosec B602
         preexec_fn=os.setsid,
     )
 
-    s3 = boto3.resource(
+    s3 = boto3.resource(  # nosec B106
         "s3",
         endpoint_url=ENDPOINT_URL,
         aws_access_key_id="FakeKey",
@@ -62,7 +62,7 @@ def initialize_test(spark: SparkSession):
 
 def compare_schema(schema_a: StructType, schema_b: StructType) -> bool:
     """
-    Utility menthod to comapre two schema and return the results of comparison
+    Utility method to compare two schema and return the results of comparison
 
     Args:
         schema_a (StructType): Schema for comparison
@@ -72,8 +72,7 @@ def compare_schema(schema_a: StructType, schema_b: StructType) -> bool:
         bool: Result of schema comparison
     """
     return len(schema_a) == len(schema_b) and all(
-        (a.name, a.dataType) == (b.name, b.dataType)
-        for a, b in zip(schema_a, schema_b)
+        (a.name, a.dataType) == (b.name, b.dataType) for a, b in zip(schema_a, schema_b)
     )
 
 
@@ -100,10 +99,10 @@ def test_transform(glueContext: GlueContext):
         ]
     )
     real_output = transform(spark, input_data)
-    assert compare_schema(real_output.schema, output_schema)
+    assert compare_schema(real_output.schema, output_schema)  # nosec assert_used
 
 
-# Test to verify data present in valid partioned format
+# Test to verify data present in valid partitioned format
 def test_process_data_record(glueContext: GlueContext):
     """
     Test case to test the process_data function for
@@ -122,7 +121,7 @@ def test_process_data_record(glueContext: GlueContext):
         df = spark.read.parquet(
             f"s3a://{S3_BUCKET_NAME}/{TABLE_NAME}/test=1962/data=5/msg=25"
         )
-        assert isinstance(df, DataFrame)
+        assert isinstance(df, DataFrame)  # nosec assert_used
     finally:
         os.killpg(os.getpgid(process.pid), signal.SIGTERM)
 
@@ -145,6 +144,6 @@ def test_process_data_record_count(glueContext: GlueContext):
         process_data(spark, SOURCE_NAME, TABLE_NAME)
 
         df = spark.read.parquet(f"s3a://{S3_BUCKET_NAME}/{TABLE_NAME}")
-        assert df.count() == 3
+        assert df.count() == 3  # nosec assert_used
     finally:
         os.killpg(os.getpgid(process.pid), signal.SIGTERM)
