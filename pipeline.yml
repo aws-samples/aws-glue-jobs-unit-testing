@@ -1,7 +1,7 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
 Description:
-  "**WARNING** This template creates IAM Roles, AWS CodeCommit repository, AWS CodeBuild projects and report groups, AWS CodePipeline and related resources. You will be billed for the AWS resources
+  "**WARNING** This template creates IAM Roles, AWS CodeBuild projects and report groups, AWS CodePipeline and related resources. You will be billed for the AWS resources
   used if you create a stack from this template."
 Parameters:
   CodeZipFile:
@@ -106,6 +106,8 @@ Resources:
                   - kms:DescribeKey
                 Resource:
                   - !GetAtt "KMSKey.Arn"
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
   GlueCodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -177,6 +179,8 @@ Resources:
                 TemplatePath: BuiltCode::deploy/template.yml
                 ParameterOverrides: !Sub '{"S3Bucketname": "${BucketName}", "KMSKey": "${KMSKey.Arn}"}'
               RunOrder: 1
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
   CloudformationRole:
     Type: AWS::IAM::Role
     Properties:
@@ -214,6 +218,8 @@ Resources:
                   - iam:PassRole
                 Resource:
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/glue-codepipeline-app-GlueJobRole-*"
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
   TestBuild:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -269,6 +275,8 @@ Resources:
             discard-paths: no
         Type: CODEPIPELINE
       TimeoutInMinutes: 15
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
   PublishBuild:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -299,6 +307,8 @@ Resources:
                 - aws s3 cp ./ s3://${BucketName}/GlueJobs/ --sse AES256 --recursive --exclude "*.txt" --exclude "./tests/"
         Type: CODEPIPELINE
       TimeoutInMinutes: 15
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
   TestReportGroup:
     Type: AWS::CodeBuild::ReportGroup
     Properties:
@@ -310,6 +320,8 @@ Resources:
           Path: test-report
       Name: !Ref "TestReportGroupName"
       Type: TEST
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -359,3 +371,5 @@ Resources:
                   - kms:DescribeKey
                 Resource:
                   - !GetAtt "KMSKey.Arn"
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete

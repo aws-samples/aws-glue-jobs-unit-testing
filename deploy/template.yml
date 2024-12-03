@@ -66,6 +66,8 @@ Resources:
       WorkerType: G.2X
       NumberOfWorkers: 10
       SecurityConfiguration: !Ref "GlueSecurityConfiguration"
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
   GlueSecurityConfiguration:
     Type: AWS::Glue::SecurityConfiguration
     Properties:
@@ -80,3 +82,5 @@ Resources:
         S3Encryptions:
           - KmsKeyArn: !Ref "KMSKey"
             S3EncryptionMode: SSE-KMS
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
